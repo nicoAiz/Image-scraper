@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="./styles/main.css">
+  <title>Basic Image Scraper</title>
+
+  <script defer src="./scripts/main.js"></script>
+</head>
+<body>
+  <div id="layout">
+    <div class="component">
+      <label for="query">Query string</label>
+      <input type="text" name="query">
+  
+      <label for="count">Desired amount</label>
+      <input type="number" name="count" value="15" min="1">
+  
+      <label for="level">Search level</label>
+      <input type="number" name="level" value="2" min="1">
+  
+      <button id="get-images">Get images</button>
+    </div>
+
+    <div class="component hidden">
+      <p id="status-msg"></p>
+    </div>
+  
+    <div class="component hidden">
+      <p id="error-msg"></p>
+    </div>
+  
+    <div class="component hidden">
+      <div id="grid-gallery"></div>
+    </div>
+  </div>
+</body>
+</html>
