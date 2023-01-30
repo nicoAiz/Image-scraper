@@ -1,3 +1,4 @@
+// https://github.com/chenxiaochun/blog/issues/38
 module.exports = async page => {
   await page.evaluate(async () => {
     await new Promise((resolve) => {
