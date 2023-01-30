@@ -11,7 +11,7 @@ module.exports = async (query, count = 100, level = 3) => {
   count = Math.min(Math.max(count, 1), MAX_IMAGES)
 
   // Clamp level to 1 and lookups.length
-  level = Math.min(Math.max(level, 0), sitesLUT.length)
+  level = Math.min(Math.max(level, 1), sitesLUT.length)
 
   console.log('query -> ' + query)
   console.log('count -> ' + count)
@@ -21,10 +21,6 @@ module.exports = async (query, count = 100, level = 3) => {
   const browser = await puppeteer.launch()
   const page = await browser.newPage()
   await page.setViewport({ width: 2000, height: 2000 })
-  const session = await page.target().createCDPSession()
-  await session.send('Emulation.setPageScaleFactor', {
-    pageScaleFactor: 0.25
-  })
 
   let images = []
 
@@ -47,6 +43,7 @@ module.exports = async (query, count = 100, level = 3) => {
 
   images = images.filter(i => i)
 
+  // Limit the size of the array
   while (images.length > count) {
     images.splice(Math.floor(Math.random() * images.length), 1)
   }
