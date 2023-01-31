@@ -1,58 +1,75 @@
 const puppeteer = require('puppeteer')
-const sitesLUT = require('./sitesLUT')
+const pagesLUT = require('./pagesLUT')
 const autoScroll = require('./autoScroll')
 
-const MAX_IMAGES = 1000
+const MAX_IMAGES = 500
+const MAX_ITERATIONS = 4
 
 module.exports = async (query, count = 100, level = 3) => {
-  if (!query) return { OK: false }
-
-  // Clamp count to 1 and MAX_IMAGES
-  count = Math.min(Math.max(count, 1), MAX_IMAGES)
-
-  // Clamp level to 1 and lookups.length
-  level = Math.min(Math.max(level, 1), sitesLUT.length)
-
-  console.log('query -> ' + query)
-  console.log('count -> ' + count)
-  console.log('level -> ' + level)
-
-  // Load the browser
-  const browser = await puppeteer.launch()
-  const page = await browser.newPage()
-  await page.setViewport({ width: 2000, height: 2000 })
-
-  let images = []
-
-  // Scrape the images from each valid site in the LUT
-  for (let i = 0; i < level; i++) {
-    const site = sitesLUT[i]
-    const url = site.builder(query)
-    const imgSelector = site.selector
-    await page.goto(url)
-
-    try {
-      await page.waitForSelector(imgSelector, { timeout: 1000 })
-      // Scroll to load more images
-      for (let j = 0; j < 3; j++) {
-        images.push(...await page.$$eval(imgSelector, m => m.map(i => i.src)))
-        await autoScroll(page)
-      }
-    } catch(err) { console.log(url, imgSelector) }
-  }
-
-  images = images.filter(i => i)
-
-  // Limit the size of the array
-  while (images.length > count) {
-    images.splice(Math.floor(Math.random() * images.length), 1)
-  }
-
-  console.log('Done')
-
-  await browser.close()
-  return {
-    OK: true,
-    data: images
-  }
+    if (!query) return { OK: false }
+    
+    // Clamp count, level and iterations
+    count = Math.min(Math.max(count, 1), MAX_IMAGES)
+    level = Math.min(Math.max(level, 1), pagesLUT.length)
+    const iterations = Math.min(Math.max(count / 50, 1), MAX_ITERATIONS)
+    let images = []
+    
+    // Initializes the browser
+    // https://github.com/puppeteer/puppeteer/issues/1718#issuecomment-397532083
+    const browser = await puppeteer.launch({ args: [
+        '--disable-sync',
+        '--proxy-server=\'direct://\'',
+        '--proxy-bypass-list=*'
+    ], headless: true })
+    
+    // Scrape the images from each valid site in the Lookup Table
+    // Using promises to load each page concurrently
+    const promises = []
+    for (let i = 0; i < level; i++) {
+        const promise = new Promise(async (resolve) => {
+            const currentPage = pagesLUT[i]
+            const page = await browser.newPage()
+            await page.setViewport({ width: 1024, height: 4096 })
+            await page.setRequestInterception(true)
+            // Intercept and abort any CSS or Font requests
+            page.on('request', request => {
+                if (request.isInterceptResolutionHandled()) return
+                if (['stylesheet', 'font'].includes(request.resourceType())) request.abort()
+                else request.continue()
+            })
+            
+            try {
+                await page.goto(currentPage.urlBuilder(query), { timeout: 8000, ...currentPage.options })
+                await page.waitForSelector(currentPage.selector, { timeout: 1000 })
+                
+                // Push all the images to the array
+                for (let j = 0; j < iterations; j++) {
+                    const pageImages = await page.$$eval(currentPage.selector, $ => $.map(i => i.src))
+                    images.push(...new Set(pageImages))
+                    // Try to scroll down to load more images
+                    if (currentPage.loadOnScroll) {
+                        await autoScroll(page)
+                        await new Promise(res => setTimeout(res, 2000))
+                    } else break
+                }
+            } catch(err) {
+                console.log(`Error in '${currentPage.urlBuilder(query)}' with the selector '${currentPage.selector}'`)
+            } finally {
+                resolve()
+            }
+        })
+        
+        promises.push(promise)
+    }
+    
+    await Promise.all(promises)
+    images = [...new Set(images.filter(i => i))]
+    
+    // Limit the size of the array
+    while (images.length > count) {
+        images.splice(Math.floor(Math.random() * images.length), 1)
+    }
+    
+    await browser.close()
+    return { OK: true, data: images  }
 }
